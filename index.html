@@ -1,0 +1,238 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="CS180 Project 2: convolution, edge detection, hybrid images, sharpening and multiresolution blending."><title>Filters & Frequencies — Project 2</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23152237'/%3E%3Cpath d='M5 23V9h5v14h5V9h5v14h7' fill='none' stroke='%237caaff' stroke-width='3'/%3E%3C/svg%3E"><style>
+:root{--ink:#152237;--muted:#536277;--accent:#1f57ba;--line:#dbe3ee;--paper:#fff;--wash:#f3f6fb}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:95px}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{color:var(--accent);text-underline-offset:4px}a:hover{color:#102e66}nav{position:sticky;top:0;z-index:10;background:#ffffffef;backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:13px max(24px,calc((100vw - 1160px)/2));display:flex;gap:22px;overflow-x:auto;font-size:14px;white-space:nowrap}nav a{text-decoration:none;font-weight:600}main{max-width:1160px;margin:auto;padding:0 28px}header{padding:64px 0 36px;border-bottom:2px solid var(--ink)}.eyebrow,.section-number{text-transform:uppercase;letter-spacing:.14em;font-size:13px;font-weight:700;color:var(--accent)}h1{font-family:Georgia,serif;font-weight:400;font-size:clamp(36px,6vw,66px);letter-spacing:-.035em;line-height:1.1;max-width:900px;margin:18px 0 24px}header p{font-size:20px;max-width:780px;color:var(--muted)}.hero{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}.hero img{display:block;width:100%;height:220px;object-fit:contain;background:var(--wash)}.hero span{display:block;font-size:14px;margin-top:6px;color:var(--muted)}section{padding:55px 0;border-bottom:1px solid var(--line)}h2{font:400 clamp(28px,4vw,40px)/1.2 Georgia,serif;margin:12px 0 24px;letter-spacing:-.02em}h3{font-size:22px;margin-top:30px}p{max-width:950px}figure{margin:30px 0}figure img{display:block;width:100%;height:auto;background:var(--wash);border:1px solid var(--line)}figcaption{font-size:14px;line-height:1.65;color:var(--muted);margin-top:10px;max-width:1000px}pre{font:14px/1.65 Consolas,"Courier New",monospace;background:#101e32;color:#e3efff;padding:23px;border-radius:4px;overflow:auto;tab-size:4}p code,li code{font-size:.9em;background:var(--wash);padding:2px 4px}table{border-collapse:collapse;width:100%;font-size:15px;margin:22px 0}th,td{text-align:left;padding:14px;border-bottom:1px solid var(--line)}th{background:var(--wash)}details{margin:22px 0}summary{cursor:pointer;font-weight:600}.distance-demo{background:var(--wash);padding:24px}.distance-demo label{font-size:15px}.distance-demo input{width:min(100%,400px);display:block;margin-top:12px}.distance-stage{min-height:420px;display:flex;align-items:center;justify-content:center;margin-top:15px}.distance-stage img{max-width:100%;height:auto}.download{display:inline-block;margin:8px 20px 0 0;font-size:15px}footer{padding:30px 0 60px;color:var(--muted);font-size:14px}@media(max-width:680px){main{padding:0 18px}header{padding-top:35px}.hero{gap:8px}.hero img{height:120px}section{padding:35px 0}pre{font-size:12px;padding:15px}table{font-size:12px}th,td{padding:8px}.distance-stage{min-height:300px}nav{padding:12px 18px;gap:18px}}@media print{nav,.distance-demo,details{display:none}main{max-width:none}section{break-before:auto}figure,pre{break-inside:avoid}a{color:inherit}body{font-size:11pt}header{padding-top:0}h1{font-size:32pt}pre{white-space:pre-wrap;background:#f3f6fb;color:#152237}figure img{max-height:700px;object-fit:contain}section{padding:20px 0}}
+</style></head><body><nav aria-label="Sections"><a href="#convolution">Convolution</a><a href="#edges">Edges</a><a href="#dog">Gaussian derivatives</a><a href="#sharpening">Sharpening</a><a href="#hybrids">Hybrids</a><a href="#stacks">Stacks</a><a href="#blending">Blending</a><a href="#sources">Code & sources</a></nav><main><header><div class="eyebrow">Computer vision · Project 02</div><h1>Fun with filters<br>and frequencies.</h1><p>From a weighted sum of neighboring pixels to images that change with distance: an illustrated study of convolution and multiresolution processing.</p><a class="download" href="#convolution">Explore the experiments</a><a class="download" href="code/metrics.json">Numerical checks</a><div class="hero"><div><img src="assets/sharpened_taj.webp" alt="Sharpened Taj Mahal"><span>01 · Enhance detail</span></div><div><img src="assets/derek_nutmeg.webp" alt="Hybrid of Derek and Nutmeg"><span>02 · Mix frequency bands</span></div><div><img src="assets/oraple.webp" alt="Apple-orange multiresolution blend"><span>03 · Blend across scales</span></div></div></header><section id="convolution"><div class="section-number">01 / FILTERS</div><h2>A convolution, one pixel at a time</h2>
+<p>At each output location, a patch of the padded image is multiplied element by element with a filter rotated by 180 degrees. Summing those products gives one output pixel. The four-loop version performs every multiplication in Python; the two-loop version uses NumPy for the patch multiplication and reduction.</p>
+<p>The input is zero-padded for <code>same</code> output dimensions. A 9 × 9 box filter requires four pixels on every side. For even filter dimensions, the extra padding goes on the top or left to match SciPy’s convention. Pixels outside the image are treated as black, which can darken blurred borders or introduce border edges.</p>
+<pre><code>def prepare(image, kernel):
+    image = np.asarray(image, dtype=float)
+    kernel = np.asarray(kernel, dtype=float)
+    if image.ndim != 2 or kernel.ndim != 2 or not kernel.size:
+        raise ValueError(&quot;Expected a grayscale image and a nonempty 2D kernel.&quot;)
+    kh, kw = kernel.shape
+    padded = np.pad(image, ((kh // 2, (kh - 1) // 2),
+                            (kw // 2, (kw - 1) // 2)), mode=&quot;constant&quot;)
+    return padded, kernel[::-1, ::-1], np.zeros_like(image)
+
+def convolve_four(image, kernel):
+    padded, flipped, output = prepare(image, kernel)
+    h, w = output.shape
+    kh, kw = flipped.shape
+    for i in range(h):
+        for j in range(w):
+            total = 0.0
+            for z in range(kh):
+                for k in range(kw):
+                    total += flipped[z, k] * padded[i + z, j + k]
+            output[i, j] = total
+    return output
+
+def convolve_two(image, kernel):
+    padded, flipped, output = prepare(image, kernel)
+    h, w = output.shape
+    kh, kw = flipped.shape
+    for i in range(h):
+        for j in range(w):
+            patch = padded[i:i + kh, j:j + kw]
+            output[i, j] = np.sum(patch * flipped)
+    return output</code></pre>
+<pre><code>box_filter = np.ones((9, 9), dtype=float) / 81
+Dx = np.array([[1., 0., -1.]])
+Dy = Dx.T
+reference = convolve2d(image, box_filter, mode="same",
+                       boundary="fill", fillvalue=0)</code></pre>
+<p>The three-tap derivative filters above match the diagram on the assignment page. Earlier experiments used two-tap differences; both are finite differences, but their response magnitudes and sampling positions differ.</p>
+<figure><a href="assets/01_selfie_filters.webp"><img src="assets/01_selfie_filters.webp" loading="lazy" alt="Selfie filtered with the box filter, Dx, and Dy. Derivative displays are centered on gray at zero; negative values remain in the computed arrays. This gallery uses a 512-pixel longest side for a compact reproducible run."></a><figcaption>Selfie filtered with the box filter, Dx, and Dy. Derivative displays are centered on gray at zero; negative values remain in the computed arrays. This gallery uses a 512-pixel longest side for a compact reproducible run.</figcaption></figure>
+<h3>Runtime and numerical agreement</h3>
+<table><thead><tr><th>Recorded experiment</th><th>Four loops</th><th>Two loops</th><th>SciPy</th></tr></thead><tbody>
+<tr><td>Earlier user measurement, 1280 × 1707</td><td>31.7 s</td><td>4.3 s</td><td>Not recorded</td></tr>
+<tr><td>New 128 × 128 crop, 9 × 9 box</td><td>0.2255 s</td><td>0.0324 s</td><td>0.0012 s</td></tr>
+</tbody></table>
+<p>The earlier measurement gives a <strong>7.37× speedup</strong>. It is preserved as reported, rather than presented as a measurement from this run. The new benchmark times a common crop on the same runtime. Both algorithms still perform O(HWkhkw) arithmetic; vectorization reduces Python overhead.</p>
+<p>All 14 checks against SciPy passed, including asymmetric filters, even dimensions, and a filter larger than the test image. The selfie box-filter maximum absolute error was 6.66e-16; the derivative errors were zero.</p></section><section id="edges"><div class="section-number">1.2</div><h2>From brightness changes to edges</h2>
+<p>Dx measures horizontal brightness changes and emphasizes vertical edges; Dy measures vertical changes and emphasizes horizontal edges. The gradient magnitude combines them: <code>sqrt(dx**2 + dy**2)</code>. Thresholding keeps pixels whose change is sufficiently strong.</p>
+<pre><code>dx = conv(camera, DX)
+dy = conv(camera, DY)
+magnitude = np.sqrt(dx**2 + dy**2)
+edges = magnitude > 0.16</code></pre>
+<figure><a href="assets/02_finite_difference.webp"><img src="assets/02_finite_difference.webp" loading="lazy" alt="Cameraman: original, signed derivatives, magnitude, and binary edges. Derivative displays use a signed contrast mapping; magnitude and binary images use black for zero."></a><figcaption>Cameraman: original, signed derivatives, magnitude, and binary edges. Derivative displays use a signed contrast mapping; magnitude and binary images use black for zero.</figcaption></figure>
+<figure><a href="assets/02_thresholds.webp"><img src="assets/02_thresholds.webp" loading="lazy" alt="Threshold exploration: 0.08, 0.12, 0.16, and 0.22. Higher thresholds suppress the ground texture but remove weaker parts of the scene."></a><figcaption>Threshold exploration: 0.08, 0.12, 0.16, and 0.22. Higher thresholds suppress the ground texture but remove weaker parts of the scene.</figcaption></figure>
+<p>The chosen threshold of <strong>0.16</strong> retains the person’s silhouette and tripod while suppressing much of the low-contrast background. Some textured ground remains, and some distant structures are incomplete. This is a qualitative tradeoff, rather than a claim that every real edge is recovered.</p></section><section id="dog"><div class="section-number">1.3</div><h2>Smooth first, then differentiate</h2>
+<p>A Gaussian reduces rapid variations before differentiation. A 9 × 9 kernel with σ = 1.5 is constructed from OpenCV’s normalized one-dimensional coefficients using an outer product.</p>
+<pre><code>def gaussian_kernel(sigma, size=None):
+    size = size or (2 * int(np.ceil(3 * sigma)) + 1)
+    g = cv2.getGaussianKernel(size, sigma).ravel()
+    return g, np.outer(g, g)</code></pre>
+<pre><code>_, G = gaussian_kernel(1.5, 9)
+smoothed = conv(camera, G)
+sx, sy, smooth_magnitude = gradient(smoothed)
+smooth_edges = smooth_magnitude > 0.055
+
+DoG_x = conv(G, DX, mode="full")
+DoG_y = conv(G, DY, mode="full")
+fx = conv(camera, DoG_x)
+fy = conv(camera, DoG_y)</code></pre>
+<figure><a href="assets/03_gaussian_edges.webp"><img src="assets/03_gaussian_edges.webp" loading="lazy" alt="Raw and Gaussian-smoothed edge detection. Smoothing suppresses much of the speckled ground texture while broadening the person and tripod outlines. Thresholds are tuned separately because smoothing weakens the responses."></a><figcaption>Raw and Gaussian-smoothed edge detection. Smoothing suppresses much of the speckled ground texture while broadening the person and tripod outlines. Thresholds are tuned separately because smoothing weakens the responses.</figcaption></figure>
+<figure><a href="assets/03_dog_filters.webp"><img src="assets/03_dog_filters.webp" loading="lazy" alt="Gaussian and derivative-of-Gaussian filters. Gray is zero in the signed filters; their positive and negative lobes measure directional change after smoothing."></a><figcaption>Gaussian and derivative-of-Gaussian filters. Gray is zero in the signed filters; their positive and negative lobes measure directional change after smoothing.</figcaption></figure>
+<figure><a href="assets/03_dog_results.webp"><img src="assets/03_dog_results.webp" loading="lazy" alt="Two-step filtering compared with one image convolution per derivative direction. The visible boundary response differs because intermediate same-mode cropping discards values outside the image."></a><figcaption>Two-step filtering compared with one image convolution per derivative direction. The visible boundary response differs because intermediate same-mode cropping discards values outside the image.</figcaption></figure>
+<p>Associativity gives <code>(I * G) * D = I * (G * D)</code>. The combined filter is constructed with <code>full</code> convolution, so its support is not truncated. Interior maximum error: <strong>7.29e-16</strong>. When both paths use full convolution throughout, the maximum error is <strong>7.29e-16</strong>. Repeated same-mode cropping gives a border-inclusive error of 0.367; that difference must not be described as numerical noise.</p></section><section id="orientation"><div class="section-number">EXTENSION / 1</div><h2>Direction in color</h2>
+<p>Hue encodes the gradient direction and value encodes its strength. The angle is recovered without built-in angle functions: a 24-step bisection finds the first-quadrant angle whose sine/cosine ratio matches |Dy|/|Dx|, then signs restore the quadrant. Flat pixels are black because their magnitude is zero. Positive image y points downward.</p>
+<figure><a href="assets/04_orientation.webp"><img src="assets/04_orientation.webp" loading="lazy" alt="Cameraman gradient orientations and a hue legend. Opposite gradient signs differ by half a turn in hue."></a><figcaption>Cameraman gradient orientations and a hue legend. Opposite gradient signs differ by half a turn in hue.</figcaption></figure>
+<details><summary>Orientation implementation</summary><pre><code>def orientation_without_angles(dx, dy):
+    &quot;&quot;&quot;Recover angle via bisection in quadrant I, then restore quadrants.
+
+    No arctan, arctan2, angle, or other built-in inverse-angle function.
+    Image y points down: increasing hue rotates clockwise in image coordinates.
+    &quot;&quot;&quot;
+    ax, ay = np.abs(dx), np.abs(dy)
+    low, high = np.zeros_like(ax), np.full_like(ax, np.pi / 2)
+    for _ in range(24):
+        middle = (low + high) / 2
+        bigger = ay * np.cos(middle) &gt; ax * np.sin(middle)
+        low = np.where(bigger, middle, low)
+        high = np.where(bigger, high, middle)
+    theta = (low + high) / 2
+    theta = np.where(dx &lt; 0, np.pi - theta, theta)
+    theta = np.where(dy &lt; 0, 2 * np.pi - theta, theta)
+    return np.where((ax + ay) == 0, 0, theta) % (2 * np.pi)</code></pre></details></section><section id="sharpening"><div class="section-number">2.1</div><h2>Adding back high frequencies</h2>
+<p>A Gaussian gives the low-frequency image L = I * G. Subtracting it gives the high-frequency residual H = I − L. Unsharp masking adds a scaled residual: <strong>S = I + αH</strong>. The equivalent single filter is <code>(1 + α)δ − αG</code>, where δ is one at the center and zero elsewhere.</p>
+<pre><code>def unsharp(image, sigma=2, amount=1):
+    _, G = gaussian_kernel(sigma)
+    impulse = np.zeros_like(G)
+    impulse[G.shape[0]//2, G.shape[1]//2] = 1
+    kernel = (1 + amount) * impulse - amount * G
+    return conv(image, kernel, boundary=&quot;symm&quot;)</code></pre>
+<p>Sharpening and blending use symmetric boundary extension to avoid an artificial black frame. Part 1’s zero-padding implementation remains separate. Computations keep out-of-range values; clipping occurs only for display/export.</p>
+<figure><a href="assets/05_sharpen_taj.webp"><img src="assets/05_sharpen_taj.webp" loading="lazy" alt="Taj Mahal: original, Gaussian low-pass, signed high-pass, and sharpening at alpha 0.5, 1, and 2. Higher amounts emphasize architectural edges but increase the risk of halos."></a><figcaption>Taj Mahal: original, Gaussian low-pass, signed high-pass, and sharpening at alpha 0.5, 1, and 2. Higher amounts emphasize architectural edges but increase the risk of halos.</figcaption></figure>
+<figure><a href="assets/05_sharpen_selfie.webp"><img src="assets/05_sharpen_selfie.webp" loading="lazy" alt="The same sharpening experiment on the selfie. Fine hair and shirt texture become stronger; sharpening also amplifies texture that may be unwanted."></a><figcaption>The same sharpening experiment on the selfie. Fine hair and shirt texture become stronger; sharpening also amplifies texture that may be unwanted.</figcaption></figure>
+<p>The single-filter result matches explicit residual addition to 1.55e-15 maximum absolute error.</p>
+<figure><a href="assets/05_recovery.webp"><img src="assets/05_recovery.webp" loading="lazy" alt="Sharp → blurred → resharpened experiment, with matching close-ups. Resharpening strengthens surviving contours but does not restore the original fine texture."></a><figcaption>Sharp → blurred → resharpened experiment, with matching close-ups. Resharpening strengthens surviving contours but does not restore the original fine texture.</figcaption></figure>
+<p>For the astronaut image, the mean squared error relative to the sharp original changes from 0.003168 after blurring to 0.002130 after sharpening (display-clipped result). The improvement is not exact recovery: the blur attenuated high frequencies, and unsharp masking is not its inverse.</p></section><section id="hybrids"><div class="section-number">2.2</div><h2>Two images, two viewing distances</h2>
+<p>A hybrid keeps low frequencies from image A and high frequencies from image B: <code>hybrid = blur(A, σlow) + B − blur(B, σhigh)</code>. The supplied starter aligns Derek and Nutmeg by centering, rescaling, rotating, and matching the image sizes. Saved eye coordinates replace interactive clicks so the results are reproducible. A shared face crop excludes the starter’s black padding. The two custom pairs are already aligned by the user; only the unmatched last row in Ansel/Lily is removed, followed by an identical resize. The longest processed side is at most 512 pixels.</p>
+<pre><code>def align_starter_pair(high, low, points):
+    &quot;&quot;&quot;Use the supplied starter, replacing interactive clicks with saved points.&quot;&quot;&quot;
+    from starter.align_image_code import (align_image_centers, rescale_images,
+                                          rotate_im1, match_img_size)
+    def align(a,b):
+        a,b = align_image_centers(a,b,points)
+        a,b = rescale_images(a,b,points)
+        a,_ = rotate_im1(a,points)
+        return match_img_size(a,b)
+    valid_high, valid_low = align(np.ones(high.shape[:2]),np.ones(low.shape[:2]))
+    high, low = align(high,low)
+    valid = (valid_high &gt; .999) &amp; (valid_low &gt; .999)
+    # Crop both images identically to real overlapping pixels, not the padded
+    # black canvas. The eyes are centered by the starter; include more below.
+    h,w = valid.shape
+    cy,cx = round(h*.55),w//2
+    best = None
+    for width in range(20,w+1,2):
+        height = round(width*1.15)
+        y,x = cy-height//2,cx-width//2
+        if y&lt;0 or x&lt;0 or y+height&gt;h or x+width&gt;w:
+            break
+        if valid[y:y+height,x:x+width].all():
+            best = (slice(y,y+height),slice(x,x+width))
+        else:
+            break
+    if best is None:
+        raise ValueError(&quot;The selected landmarks have no common valid face crop.&quot;)
+    return resize_pair(high[best],low[best])
+
+def resize_pair(a, b, max_side=512):
+    &quot;&quot;&quot;Preserve an existing alignment; remove only unmatched edge pixels.&quot;&quot;&quot;
+    h, w = min(a.shape[0], b.shape[0]), min(a.shape[1], b.shape[1])
+    a, b = a[:h, :w], b[:h, :w]
+    scale = min(1.0, max_side / max(h, w))
+    size = (round(w*scale), round(h*scale))
+    return (cv2.resize(a,size,interpolation=cv2.INTER_AREA),
+            cv2.resize(b,size,interpolation=cv2.INTER_AREA))
+
+def hybrid(a, b, sigma_low=7, sigma_high=4, color=&quot;both&quot;):
+    low = blur(a, sigma_low)
+    high = b - blur(b, sigma_high)
+    if color in (&quot;gray&quot;, &quot;high&quot;):
+        low = np.repeat(rgb2gray(low)[...,None], 3, axis=-1)
+    if color in (&quot;gray&quot;, &quot;low&quot;):
+        high = np.repeat(rgb2gray(high)[...,None], 3, axis=-1)
+    return low, high, low + high</code></pre>
+<figure><a href="assets/06_derek_nutmeg.webp"><img src="assets/06_derek_nutmeg.webp" loading="lazy" alt="Required example using the starter convention: Nutmeg supplies low frequencies and Derek supplies high frequencies. The final small diagnostic is downsampled and enlarged by the panel layout; the adjustable preview below changes the actual display size."></a><figcaption>Required example using the starter convention: Nutmeg supplies low frequencies and Derek supplies high frequencies. The final small diagnostic is downsampled and enlarged by the panel layout; the adjustable preview below changes the actual display size.</figcaption></figure>
+<div class="distance-demo"><div><label for="distance">Hybrid display width: <output id="distance-value">320</output> px</label><input id="distance" type="range" min="40" max="400" value="320"></div><div class="distance-stage"><img id="hybrid-preview" src="assets/derek_nutmeg.webp" alt="Derek and Nutmeg hybrid at adjustable viewing size" width="320" height="320"></div></div>
+<figure><a href="assets/06_filtered.webp"><img src="assets/06_filtered.webp" loading="lazy" alt="Detailed pipeline: low-pass Nutmeg, signed high-pass Derek, and the combined hybrid. The displayed high-pass is contrast-scaled around gray; that display mapping is not used in the sum."></a><figcaption>Detailed pipeline: low-pass Nutmeg, signed high-pass Derek, and the combined hybrid. The displayed high-pass is contrast-scaled around gray; that display mapping is not used in the sum.</figcaption></figure>
+<figure><a href="assets/06_cutoffs.webp"><img src="assets/06_cutoffs.webp" loading="lazy" alt="Cutoff exploration. Sigma 3/2 retains too much competing face detail; 12/7 separates coarser scales but loses more structure. Sigma 7/4 is the selected compromise."></a><figcaption>Cutoff exploration. Sigma 3/2 retains too much competing face detail; 12/7 separates coarser scales but loses more structure. Sigma 7/4 is the selected compromise.</figcaption></figure>
+<p>For the selected 7/4 pixel sigmas, the ideal Gaussian half-amplitude frequencies are about <strong>0.0268</strong> and <strong>0.0468 cycles/pixel</strong>. These are descriptive cutoffs, not hard passband boundaries. The discrete, truncated filters approximate the ideal response.</p>
+<figure><a href="assets/06_fourier.webp"><img src="assets/06_fourier.webp" loading="lazy" alt="Log-magnitude Fourier spectra of both aligned inputs, the low-pass and high-pass components, and the hybrid. All panels use one common scale. The low-pass concentrates around the center; the high-pass suppresses the DC component. FFTs use the signed arrays before clipping."></a><figcaption>Log-magnitude Fourier spectra of both aligned inputs, the low-pass and high-pass components, and the hybrid. All panels use one common scale. The low-pass concentrates around the center; the high-pass suppresses the DC component. FFTs use the signed arrays before clipping.</figcaption></figure>
+<p>The spectrum is computed with <code>log1p(abs(fftshift(fft2(gray))))</code>. Adding one avoids log(0).</p>
+<figure><a href="assets/06_ansel_lily.webp"><img src="assets/06_ansel_lily.webp" loading="lazy" alt="Custom pairing 1: Ansel provides low frequencies (sigma 7), and Lily provides high frequencies (sigma 3). The prealigned eyes support the transition; long hair remains a strong near-view cue while the distant appearance is dominated by Ansel."></a><figcaption>Custom pairing 1: Ansel provides low frequencies (sigma 7), and Lily provides high frequencies (sigma 3). The prealigned eyes support the transition; long hair remains a strong near-view cue while the distant appearance is dominated by Ansel.</figcaption></figure>
+<figure><a href="assets/06_bill_davyjones.webp"><img src="assets/06_bill_davyjones.webp" loading="lazy" alt="Custom pairing 2: Bill provides low frequencies (sigma 7), and Davy Jones provides high frequencies (sigma 3). Fine skin texture and tentacle contours appear up close, while Bill’s broad face and glasses remain visible at smaller sizes. The glasses are a competing feature that limits a completely clean identity switch."></a><figcaption>Custom pairing 2: Bill provides low frequencies (sigma 7), and Davy Jones provides high frequencies (sigma 3). Fine skin texture and tentacle contours appear up close, while Bill’s broad face and glasses remain visible at smaller sizes. The glasses are a competing feature that limits a completely clean identity switch.</figcaption></figure>
+<h3>Bells and whistles: where should the color go?</h3>
+<figure><a href="assets/06_color_derek_nutmeg.webp"><img src="assets/06_color_derek_nutmeg.webp" loading="lazy" alt="Derek/Nutmeg: grayscale, color in low frequencies, color in high frequencies, and color in both. The low-color version retains Nutmeg’s broad coat colors with signed detail from Derek."></a><figcaption>Derek/Nutmeg: grayscale, color in low frequencies, color in high frequencies, and color in both. The low-color version retains Nutmeg’s broad coat colors with signed detail from Derek.</figcaption></figure>
+<figure><a href="assets/06_color_ansel_lily.webp"><img src="assets/06_color_ansel_lily.webp" loading="lazy" alt="Ansel/Lily: the same four color choices. Low-frequency color preserves Ansel’s broad skin and clothing colors; high-only color mainly affects fine hair and facial edges."></a><figcaption>Ansel/Lily: the same four color choices. Low-frequency color preserves Ansel’s broad skin and clothing colors; high-only color mainly affects fine hair and facial edges.</figcaption></figure>
+<figure><a href="assets/06_color_bill_davyjones.webp"><img src="assets/06_color_bill_davyjones.webp" loading="lazy" alt="Bill/Davy Jones: the same four color choices. Low-only color keeps Bill’s skin tone while the high-frequency texture supplies the creature detail. Both-color introduces stronger local color variation in that texture."></a><figcaption>Bill/Davy Jones: the same four color choices. Low-only color keeps Bill’s skin tone while the high-frequency texture supplies the creature detail. Both-color introduces stronger local color variation in that texture.</figcaption></figure>
+<p>All three final hybrids use color in the low-frequency component and grayscale in the high-frequency component. This gives the distant image a stable color appearance while avoiding competing colored outlines. The grayscale and both-color versions remain visible above as alternatives, rather than treating one choice as universally best.</p>
+<h3>Reversing the frequency assignment</h3>
+<figure><a href="assets/06_direction_derek_nutmeg.webp"><img src="assets/06_direction_derek_nutmeg.webp" loading="lazy" alt="Starter assignment on the left; reversed frequency roles on the right. Reversing roles changes which identity dominates at distance."></a><figcaption>Starter assignment on the left; reversed frequency roles on the right. Reversing roles changes which identity dominates at distance.</figcaption></figure>
+<figure><a href="assets/06_direction_ansel_lily.webp"><img src="assets/06_direction_ansel_lily.webp" loading="lazy" alt="Ansel-low/Lily-high compared with Lily-low/Ansel-high."></a><figcaption>Ansel-low/Lily-high compared with Lily-low/Ansel-high.</figcaption></figure>
+<figure><a href="assets/06_direction_bill_davyjones.webp"><img src="assets/06_direction_bill_davyjones.webp" loading="lazy" alt="Bill-low/Davy-high compared with Davy-low/Bill-high. The role swap changes whether the glasses or the tentacle structure is retained as fine detail."></a><figcaption>Bill-low/Davy-high compared with Davy-low/Bill-high. The role swap changes whether the glasses or the tentacle structure is retained as fine detail.</figcaption></figure>
+<p>The Ansel/Lily and Bill/Davy Jones files were supplied by the user as selected image pairs; they are not described as photographs taken by the user.</p></section><section id="stacks"><div class="section-number">2.3</div><h2>A stack keeps every level the same size</h2>
+<p>The Gaussian stack has six levels with approximate cumulative sigmas 0, 1, 2, 4, 8, and 16. Each level blurs the preceding level by an incremental sigma based on variance addition. Nothing is downsampled, and no built-in pyramid function is used.</p>
+<p>Laplacian levels are adjacent differences: <code>L[i] = G[i] − G[i+1]</code>. The last level stores the remaining low-frequency image. Summing all levels reconstructs the input because the differences telescope.</p>
+<pre><code>def gaussian_stack(image, levels=6, base_sigma=1):
+    &quot;&quot;&quot;No downsampling: levels have sigma 0, 1, 2, 4, 8, 16 by default.
+
+    Blur each preceding level by the incremental sigma needed to reach the
+    next target variance. Finite sampled kernels approximate these variances.
+    &quot;&quot;&quot;
+    stack = [np.asarray(image, dtype=float)]
+    previous_sigma = 0
+    for level in range(1, levels):
+        sigma = base_sigma * 2**(level-1)
+        incremental = np.sqrt(sigma**2 - previous_sigma**2)
+        stack.append(blur(stack[-1], incremental))
+        previous_sigma = sigma
+    return np.stack(stack)
+
+def laplacian_stack(gaussian):
+    return np.concatenate((gaussian[:-1] - gaussian[1:], gaussian[-1:]), axis=0)</code></pre>
+<figure><a href="assets/07_gaussian_apple.webp"><img src="assets/07_gaussian_apple.webp" loading="lazy" alt="Apple Gaussian stack. Every level has the original 300 × 300 dimensions."></a><figcaption>Apple Gaussian stack. Every level has the original 300 × 300 dimensions.</figcaption></figure>
+<figure><a href="assets/07_laplacian_apple.webp"><img src="assets/07_laplacian_apple.webp" loading="lazy" alt="Apple Laplacian stack. Signed bands are contrast-scaled individually for visibility; the final residual is shown normally."></a><figcaption>Apple Laplacian stack. Signed bands are contrast-scaled individually for visibility; the final residual is shown normally.</figcaption></figure>
+<figure><a href="assets/07_gaussian_orange.webp"><img src="assets/07_gaussian_orange.webp" loading="lazy" alt="Orange Gaussian stack with the same scale schedule."></a><figcaption>Orange Gaussian stack with the same scale schedule.</figcaption></figure>
+<figure><a href="assets/07_laplacian_orange.webp"><img src="assets/07_laplacian_orange.webp" loading="lazy" alt="Orange Laplacian stack and its low-frequency residual."></a><figcaption>Orange Laplacian stack and its low-frequency residual.</figcaption></figure>
+<figure><a href="assets/07_oraple_stacks.webp"><img src="assets/07_oraple_stacks.webp" loading="lazy" alt="Gaussian and Laplacian stacks of the reconstructed oraple itself."></a><figcaption>Gaussian and Laplacian stacks of the reconstructed oraple itself.</figcaption></figure>
+<p>Maximum reconstruction errors: apple 1.11e-16; orange 2.78e-17.</p></section><section id="blending"><div class="section-number">2.4</div><h2>A different transition at every scale</h2>
+<p>A Gaussian stack of the mask controls how the two Laplacian stacks mix. White selects A, black selects B. At each level, <code>Lblend = M × LA + (1 − M) × LB</code>; adding the blended levels reconstructs the final image. Fine details use a narrow transition, while coarse appearance is mixed over a wider area.</p>
+<pre><code>def multiresolution_blend(a, b, mask, levels=6):
+    ga, gb = gaussian_stack(a, levels), gaussian_stack(b, levels)
+    gm = gaussian_stack(mask, levels)
+    la, lb = laplacian_stack(ga), laplacian_stack(gb)
+    weights = gm[...,None] if a.ndim == 3 else gm
+    contribution_a, contribution_b = weights*la, (1-weights)*lb
+    bands = contribution_a + contribution_b
+    return bands.sum(axis=0), (ga,gb,gm,la,lb,contribution_a,contribution_b,bands)</code></pre>
+<figure><a href="assets/07_mask_stack.webp"><img src="assets/07_mask_stack.webp" loading="lazy" alt="The vertical mask becomes progressively smoother with scale."></a><figcaption>The vertical mask becomes progressively smoother with scale.</figcaption></figure>
+<figure><a href="assets/08_oraple.webp"><img src="assets/08_oraple.webp" loading="lazy" alt="Apple/orange inputs, vertical mask, hard cut, and multiresolution result. The final blend softens the visible central boundary while keeping the skin texture."></a><figcaption>Apple/orange inputs, vertical mask, hard cut, and multiresolution result. The final blend softens the visible central boundary while keeping the skin texture.</figcaption></figure>
+<figure><a href="assets/07_figure_342.webp"><img src="assets/07_figure_342.webp" loading="lazy" alt="Recreation of the structure of Figure 3.42 (a–l): masked apple, masked orange, and combined bands at levels 0, 2, and 4; the last row shows the summed contributions and full reconstruction. Each signed row uses a shared display scale."></a><figcaption>Recreation of the structure of Figure 3.42 (a–l): masked apple, masked orange, and combined bands at levels 0, 2, and 4; the last row shows the summed contributions and full reconstruction. Each signed row uses a shared display scale.</figcaption></figure>
+<figure><a href="assets/08_portrait_blend.webp"><img src="assets/08_portrait_blend.webp" loading="lazy" alt="Custom blend 1: the selfie is aligned to the astronaut’s eyes and blended with a polygonal face mask. Reflected pixels outside the aligned selfie appear in the source canvas but are mostly excluded by the mask."></a><figcaption>Custom blend 1: the selfie is aligned to the astronaut’s eyes and blended with a polygonal face mask. Reflected pixels outside the aligned selfie appear in the source canvas but are mostly excluded by the mask.</figcaption></figure>
+<p>The multiresolution result removes the obvious cut around the face. Lighting, hair, and pose still differ; smooth transitions cannot make incompatible subjects geometrically identical.</p>
+<figure><a href="assets/08_winnie_inputs.webp"><img src="assets/08_winnie_inputs.webp" loading="lazy" alt="Custom blend 2 inputs: winnie-1 is the background, and winnie-2 supplies the face. Two eye landmarks set the face scale, tilt, and location before blending."></a><figcaption>Custom blend 2 inputs: winnie-1 is the background, and winnie-2 supplies the face. Two eye landmarks set the face scale, tilt, and location before blending.</figcaption></figure>
+<figure><a href="assets/08_winnie_face.webp"><img src="assets/08_winnie_face.webp" loading="lazy" alt="The aligned face, Winnie background, irregular polygon mask, hard cut, and multiresolution result. The mask stays inside the head so Winnie’s ears, body, shirt, and outer head outline remain visible."></a><figcaption>The aligned face, Winnie background, irregular polygon mask, hard cut, and multiresolution result. The mask stays inside the head so Winnie’s ears, body, shirt, and outer head outline remain visible.</figcaption></figure>
+<figure><a href="assets/08_winnie_mask_stack.webp"><img src="assets/08_winnie_mask_stack.webp" loading="lazy" alt="The irregular face mask is blurred across six scales. Coarse color and illumination transitions extend farther than the high-frequency facial detail."></a><figcaption>The irregular face mask is blurred across six scales. Coarse color and illumination transitions extend farther than the high-frequency facial detail.</figcaption></figure>
+<figure><a href="assets/08_winnie_color.webp"><img src="assets/08_winnie_color.webp" loading="lazy" alt="Winnie bells and whistles: grayscale versus RGB blending. The RGB result retains the yellow character and red shirt while smoothly transitioning the face’s skin tones at the boundary."></a><figcaption>Winnie bells and whistles: grayscale versus RGB blending. The RGB result retains the yellow character and red shirt while smoothly transitioning the face’s skin tones at the boundary.</figcaption></figure>
+<p>The multiresolution blend softens the abrupt forehead and cheek edges visible in the hard cut. Color and shading still differ between a photograph and a cartoon; the result is intentionally a stylized composite, not a claim of photorealism.</p>
+<figure><a href="assets/08_portrait_process.webp"><img src="assets/08_portrait_process.webp" loading="lazy" alt="Detailed custom-blend process: masked face bands, masked astronaut bands, combined bands, and reconstructed contributions."></a><figcaption>Detailed custom-blend process: masked face bands, masked astronaut bands, combined bands, and reconstructed contributions.</figcaption></figure>
+<figure><a href="assets/08_color_comparison.webp"><img src="assets/08_color_comparison.webp" loading="lazy" alt="Color extension: the grayscale blend versus the RGB blend. Each channel is blended with the same spatial mask, preserving the distinct apple/orange colors."></a><figcaption>Color extension: the grayscale blend versus the RGB blend. Each channel is blended with the same spatial mask, preserving the distinct apple/orange colors.</figcaption></figure>
+<p>Both custom blends use non-straight face polygons. All-zero and all-one mask tests reconstruct the selected input, checking the mask convention and residual handling.</p></section><section id="reflection"><div class="section-number">REFLECTION</div><h2>What this project makes visible</h2>
+<p>Convolution does not just blur an image: the same patch-and-sum operation can average brightness, measure directional change, or sharpen detail depending on the filter. The most useful distinction is between the computed array and its display. A signed derivative displayed on [0, 1] can look almost black even when the calculation is correct. Clipping it too early destroys information needed by later operations.</p>
+<p>Frequency separation also has limits. Sharpening cannot exactly restore information removed by blur; aligned eyes do not guarantee aligned mouths; and a smooth blend does not correct incompatible lighting or geometry. Numerical checks establish correctness of the operations, while the images reveal whether their parameters and inputs produce a convincing result.</p></section><section id="sources"><div class="section-number">SOURCES & REPRODUCTION</div><h2>Inputs, code, and measured results</h2>
+<p>The implementations and the new examples were created for this project. The report text is an editable draft based on generated outputs; review the wording and image choices before submitting it as your own explanation.</p>
+<ul>
+<li><a href="https://cal-cs180.github.io/fa26/hw/proj2/index.html">Assignment and filter definitions</a>; Taj Mahal from the assignment’s <code>files/taj.jpg</code>.</li>
+<li>Selfie and cameraman were read from the existing project’s <code>data</code> folder.</li>
+<li>Derek, Nutmeg, and the alignment helper come from the user’s supplied <code>cs180_proj2_hybrid_starter_code</code> folder. The starter helper is retained with the private source-code submission.</li>
+<li>Apple and orange are the standard course example inputs, retrieved from <a href="https://github.com/lukastojiljkovic/laplacian-pyramid-image-blending/tree/main/inputs">this input-image mirror</a>. No implementation code was used.</li>
+<li>Ansel/Lily, Bill/Davy Jones, and winnie-1/winnie-2 are user-supplied image files. Original publication/photographer credits were not provided.</li>
+<li>Astronaut (Eileen Collins / NASA) is <a href="https://scikit-image.org/docs/stable/api/skimage.data.html">scikit-image sample data</a>, used for the sharpening evaluation and the retained astronaut/selfie blend.</li>
+<li><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.convolve2d.html">SciPy convolution documentation</a> and <a href="https://docs.opencv.org/4.5.0/d4/d86/group__imgproc__filter.html">OpenCV Gaussian-kernel documentation</a>.</li>
+</ul>
+<p><a href="code/metrics.json">Measured results</a>. Full implementation files are included in the separate code submission, not hosted on this website, following the course instructions. The short implementation snippets above illustrate the requested methods.</p>
+<p>The separate project folder includes all input data. Run <code>python project2.py</code>, then <code>python build_report.py</code>. This report has no external script, font, or image dependencies. The hybrid-size slider is interactive online; the PDF shows static figures.</p></section><footer>CS180 / CS280A · Project 2 · All figures generated from the accompanying code.</footer></main><script>const slider=document.getElementById('distance');const preview=document.getElementById('hybrid-preview');const value=document.getElementById('distance-value');slider.addEventListener('input',()=>{preview.width=Number(slider.value);preview.height=Number(slider.value);value.value=slider.value;});</script></body></html>

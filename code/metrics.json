@@ -1,0 +1,228 @@
+{
+  "validation": {
+    "convolution_comparisons": 14,
+    "blend_endpoint_checks": 2,
+    "orientation_axes": true
+  },
+  "part1": {
+    "earlier_user_timings": {
+      "shape": [
+        1280,
+        1707
+      ],
+      "four_seconds": 31.7,
+      "two_seconds": 4.3,
+      "speedup": 7.372093023255814
+    },
+    "selfie_checks": {
+      "box": 6.661338147750939e-16,
+      "dx": 0.0,
+      "dy": 0.0
+    },
+    "new_128x128_benchmark_seconds": {
+      "four": 0.2255265000003419,
+      "two": 0.03242529999988619,
+      "scipy": 0.0012236000002303626
+    },
+    "dog_interior_max_error": 7.28583859910259e-16,
+    "dog_border_inclusive_max_error": 0.36672001259969894,
+    "dog_full_max_error": 7.28583859910259e-16,
+    "edge_thresholds": {
+      "raw": 0.16,
+      "smoothed": 0.055
+    }
+  },
+  "part21": {
+    "taj_single_filter_error": 1.5543122344752192e-15,
+    "selfie_single_filter_error": 1.3322676295501878e-15,
+    "blurred_mse": 0.003168046112386302,
+    "resharpened_mse": 0.002130079931371994
+  },
+  "part22": {
+    "starter_landmarks_xy_high_then_low": [
+      [
+        295,
+        343
+      ],
+      [
+        435,
+        332
+      ],
+      [
+        604,
+        284
+      ],
+      [
+        744,
+        364
+      ]
+    ],
+    "cases": {
+      "derek_nutmeg": {
+        "low_source": "nutmeg.jpg",
+        "high_source": "derek.jpg",
+        "sigma_low": 7,
+        "sigma_high": 4,
+        "color": "low",
+        "alignment": "Supplied starter functions with deterministic eye landmarks",
+        "processed_shape": [
+          512,
+          445,
+          3
+        ],
+        "half_amplitude_cutoff_cycles_per_pixel": {
+          "low": 0.026770089304182513,
+          "high": 0.0468476562823194
+        }
+      },
+      "ansel_lily": {
+        "low_source": "ansel_align.jpg",
+        "high_source": "lily_align.jpg",
+        "sigma_low": 7,
+        "sigma_high": 3,
+        "color": "low",
+        "alignment": "User-aligned inputs; matching top-left crop and uniform resize only",
+        "processed_shape": [
+          512,
+          361,
+          3
+        ],
+        "half_amplitude_cutoff_cycles_per_pixel": {
+          "low": 0.026770089304182513,
+          "high": 0.06246354170975919
+        }
+      },
+      "bill_davyjones": {
+        "low_source": "bill_align.png",
+        "high_source": "davyjones_align.png",
+        "sigma_low": 7,
+        "sigma_high": 3,
+        "color": "low",
+        "alignment": "User-aligned inputs; matching top-left crop and uniform resize only",
+        "processed_shape": [
+          369,
+          512,
+          3
+        ],
+        "half_amplitude_cutoff_cycles_per_pixel": {
+          "low": 0.026770089304182513,
+          "high": 0.06246354170975919
+        }
+      }
+    }
+  },
+  "part23_24": {
+    "reconstruction_errors": {
+      "apple_reconstruction": 1.1102230246251565e-16,
+      "orange_reconstruction": 2.7755575615628914e-17
+    },
+    "levels": 6,
+    "target_sigmas": [
+      0,
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "winnie": {
+      "background": "winnie-1.jpg",
+      "face": "winnie-2.jpg",
+      "source_eyes_xy": [
+        [
+          576,
+          310
+        ],
+        [
+          722,
+          275
+        ]
+      ],
+      "target_eyes_xy": [
+        [
+          261.40845070422534,
+          132.50704225352112
+        ],
+        [
+          341.63380281690144,
+          112.22535211267606
+        ]
+      ],
+      "transform": [
+        [
+          0.5511184314529207,
+          0.00679825369858103,
+          -58.143224459217095
+        ],
+        [
+          -0.00679825369858103,
+          0.5511184314529207,
+          -34.42387736650164
+        ]
+      ],
+      "mask_polygon_original_scale": [
+        [
+          527.0,
+          245.0
+        ],
+        [
+          550.0,
+          190.0
+        ],
+        [
+          628.0,
+          163.0
+        ],
+        [
+          717.0,
+          147.0
+        ],
+        [
+          793.0,
+          171.0
+        ],
+        [
+          839.0,
+          221.0
+        ],
+        [
+          860.0,
+          289.0
+        ],
+        [
+          858.0,
+          361.0
+        ],
+        [
+          829.0,
+          437.0
+        ],
+        [
+          769.0,
+          496.0
+        ],
+        [
+          693.0,
+          520.0
+        ],
+        [
+          614.0,
+          479.0
+        ],
+        [
+          557.0,
+          421.0
+        ],
+        [
+          523.0,
+          345.0
+        ],
+        [
+          516.0,
+          290.0
+        ]
+      ]
+    }
+  },
+  "total_run_seconds": 15.062771699998848
+}
